@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Cafe JS Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #111; }
+        #ui {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; z-index: 10;
+        }
+        button { padding: 10px 15px; cursor: pointer; background: #6f4e37; color: white; border: none; border-radius: 5px; }
+        #instructions {
+            position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="instructions">CLICK SCREEN TO START<br>WASD to Move | Mouse to Look</div>
+    <div id="ui">
+        <button id="brewBtn">Brew Coffee</button>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    <script type="module" src="game.js"></script>
+</body>
+</html>
