@@ -16,7 +16,12 @@ scene.add(ambient, point);
 // --- 2. PHYSICS & OBSTACLE DATA ---
 const obstacles = [];
 const playerRadius = 0.4;
+let yVelocity = 0;
+const gravity = -0.012;
+const jumpStrength = 0.25;
+let isGrounded = true;
 
+// Helper to create objects with hitboxes
 function createBox(w, h, d, x, y, z, color, isObstacle = true) {
     const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
@@ -26,79 +31,56 @@ function createBox(w, h, d, x, y, z, color, isObstacle = true) {
     scene.add(mesh);
     
     if (isObstacle) {
-        // Force the bounding box to update immediately
-        const box = new THREE.Box3().setFromObject(mesh);
+        const box = new THREE.Box3();
+        box.setFromObject(mesh);
         obstacles.push(box);
     }
     return mesh;
 }
 
-// --- 3. THE FULL ROOM LAYOUT ---
-
-// Floor (No collision needed)
+// --- 3. THE CAFE LAYOUT ---
+// Floor
 const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(15, 15),
+    new THREE.PlaneGeometry(15, 15), 
     new THREE.MeshStandardMaterial({ color: 0x3e2723 })
 );
-floor.rotation.x = -Math.PI / 2;
+floor.rotation.x = -Math.PI / 2; 
 floor.position.y = -1;
 scene.add(floor);
 
-// 4 Walls (Enclosing the 15x15 space)
+// Walls
 const wallColor = 0xf5f5dc;
 createBox(15, 5, 0.5, 0, 1.5, -7.5, wallColor); // Back
 createBox(15, 5, 0.5, 0, 1.5, 7.5, wallColor);  // Front
 createBox(0.5, 5, 15, -7.5, 1.5, 0, wallColor); // Left
 createBox(0.5, 5, 15, 7.5, 1.5, 0, wallColor);  // Right
 
-// Service Counter
+// Main Service Counter
 createBox(6, 1.2, 1.5, -2, -0.4, -4, 0x221105);
 
-// Tables
+// Tables (With Collision)
 function createTable(x, z) {
-    const top = createBox(1.5, 0.1, 1.5, x, -0.4, z, 0x5d4037);
-    // Visual only leg (no collision)
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), new THREE.MeshStandardMaterial({color: 0x111111}));
+    createBox(1.5, 0.1, 1.5, x, -0.4, z, 0x5d4037); // Table Top
+    const leg = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 1), 
+        new THREE.MeshStandardMaterial({color: 0x111111})
+    );
     leg.position.set(x, -0.9, z);
     scene.add(leg);
 }
 createTable(4, 2);
 createTable(4, -2);
+createTable(-4, 3); // Added an extra table for the layout
 
-// --- 4. THE DRINK ---
-const cup = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.1, 0.3, 32),
-    new THREE.MeshStandardMaterial({ color: 0xffffff })
-);
-cup.position.set(-1, 0.35, -4);
-scene.add(cup);
-
-const liquid = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.14, 0.28, 32),
-    new THREE.MeshStandardMaterial({ color: 0x3c2005 })
-);
-liquid.position.copy(cup.position);
-liquid.scale.y = 0.01;
-liquid.visible = false;
-scene.add(liquid);
-
-// --- 5. MOVEMENT LOGIC ---
+// --- 4. INPUT & MOVEMENT ---
 const keys = {};
-const speed = 0.08;
 let yaw = 0, pitch = 0;
-let isBrewing = false;
 
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (e.code === 'Space' && !isBrewing) {
-        if (camera.position.distanceTo(cup.position) < 2.5) {
-            isBrewing = true;
-            liquid.visible = true;
-            const interval = setInterval(() => {
-                if (liquid.scale.y < 1) liquid.scale.y += 0.02;
-                else { clearInterval(interval); isBrewing = false; }
-            }, 30);
-        }
+    if (e.code === 'Space' && isGrounded) {
+        yVelocity = jumpStrength;
+        isGrounded = false;
     }
 });
 window.addEventListener('keyup', (e) => keys[e.code] = false);
@@ -116,27 +98,28 @@ window.addEventListener('mousemove', (e) => {
 
 camera.position.set(0, 1, 4);
 
-// --- 6. COLLISION CHECKER ---
+// --- 5. COLLISION CHECKER ---
 function checkCollision(newPos) {
     const playerBox = new THREE.Box3().setFromCenterAndSize(
         newPos,
-        new THREE.Vector3(playerRadius, 2, playerRadius)
+        new THREE.Vector3(playerRadius, 1.5, playerRadius)
     );
-
-    for (let i = 0; i < obstacles.length; i++) {
-        if (playerBox.intersectsBox(obstacles[i])) return true;
+    for (let obs of obstacles) {
+        if (playerBox.intersectsBox(obs)) return true;
     }
     return false;
 }
 
-// --- 7. ANIMATION LOOP ---
+// --- 6. CORE UPDATE LOOP ---
 function update() {
     if (document.pointerLockElement === renderer.domElement) {
+        const speed = 0.08;
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         forward.y = 0; right.y = 0;
         forward.normalize(); right.normalize();
 
+        // Handle X/Z Movement
         const wishDir = new THREE.Vector3(0, 0, 0);
         if (keys['KeyW']) wishDir.add(forward);
         if (keys['KeyS']) wishDir.add(forward.clone().negate());
@@ -146,18 +129,23 @@ function update() {
         if (wishDir.length() > 0) {
             wishDir.normalize().multiplyScalar(speed);
             
-            // Try X movement
             const nextX = camera.position.clone().add(new THREE.Vector3(wishDir.x, 0, 0));
             if (!checkCollision(nextX)) camera.position.x = nextX.x;
-
-            // Try Z movement
+            
             const nextZ = camera.position.clone().add(new THREE.Vector3(0, 0, wishDir.z));
             if (!checkCollision(nextZ)) camera.position.z = nextZ.z;
         }
 
-        const dist = camera.position.distanceTo(cup.position);
-        const prompt = document.getElementById('interaction-prompt');
-        if (prompt) prompt.style.display = (dist < 2.5 && !isBrewing) ? 'block' : 'none';
+        // Handle Gravity & Jumping
+        camera.position.y += yVelocity;
+        if (camera.position.y > 1) { 
+            yVelocity += gravity;
+            isGrounded = false;
+        } else {
+            camera.position.y = 1;
+            yVelocity = 0;
+            isGrounded = true;
+        }
     }
 }
 
