@@ -2,25 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Cafe JS Edition</title>
+    <title>3D Cafe - No Buttons</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #111; }
-        #ui {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; z-index: 10;
-        }
-        button { padding: 10px 15px; cursor: pointer; background: #6f4e37; color: white; border: none; border-radius: 5px; }
         #instructions {
-            position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none;
+            position: absolute; top: 10px; left: 10px; color: white; 
+            background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none;
+        }
+        #interaction-prompt {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 20px; font-weight: bold; display: none;
+            text-shadow: 2px 2px 4px #000;
         }
     </style>
 </head>
 <body>
 
-    <div id="instructions">CLICK SCREEN TO START<br>WASD to Move | Mouse to Look</div>
-    <div id="ui">
-        <button id="brewBtn">Brew Coffee</button>
+    <div id="instructions">
+        WASD to Move | Mouse to Look<br>
+        Click to Start
     </div>
+    
+    <div id="interaction-prompt">Press SPACE to Brew</div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
