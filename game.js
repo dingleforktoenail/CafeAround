@@ -13,16 +13,16 @@ const point = new THREE.PointLight(0xffffff, 15);
 point.position.set(0, 4, 0);
 scene.add(ambient, point);
 
-// --- 2. PHYSICS & OBSTACLE DATA ---
+// --- 2. PHYSICS DATA ---
 const obstacles = [];
-const playerRadius = 0.4;
+const playerRadius = 0.5; // Increased for better collision
 let yVelocity = 0;
-const gravity = -0.012;
-const jumpStrength = 0.25;
+const gravity = -0.01;
+const jumpStrength = 0.2;
 let isGrounded = true;
 
-// Helper to create objects with hitboxes
-function createBox(w, h, d, x, y, z, color, isObstacle = true) {
+// Helper to create objects and ensure they are added to collision list
+function createPhysicsBox(w, h, d, x, y, z, color) {
     const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
         new THREE.MeshStandardMaterial({ color: color })
@@ -30,49 +30,54 @@ function createBox(w, h, d, x, y, z, color, isObstacle = true) {
     mesh.position.set(x, y, z);
     scene.add(mesh);
     
-    if (isObstacle) {
-        const box = new THREE.Box3();
-        box.setFromObject(mesh);
-        obstacles.push(box);
-    }
+    // Create the bounding box immediately
+    const box = new THREE.Box3();
+    box.setFromObject(mesh);
+    obstacles.push(box);
     return mesh;
 }
 
-// --- 3. THE CAFE LAYOUT ---
+// --- 3. CAFE BUILD ---
 // Floor
 const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(15, 15), 
+    new THREE.PlaneGeometry(20, 20),
     new THREE.MeshStandardMaterial({ color: 0x3e2723 })
 );
-floor.rotation.x = -Math.PI / 2; 
+floor.rotation.x = -Math.PI / 2;
 floor.position.y = -1;
 scene.add(floor);
 
-// Walls
+// Ceiling (Keeps you from jumping out)
+const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 20),
+    new THREE.MeshStandardMaterial({ color: 0x222222 })
+);
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.y = 4;
+scene.add(ceiling);
+
+// Walls (Full Enclosure)
 const wallColor = 0xf5f5dc;
-createBox(15, 5, 0.5, 0, 1.5, -7.5, wallColor); // Back
-createBox(15, 5, 0.5, 0, 1.5, 7.5, wallColor);  // Front
-createBox(0.5, 5, 15, -7.5, 1.5, 0, wallColor); // Left
-createBox(0.5, 5, 15, 7.5, 1.5, 0, wallColor);  // Right
+createPhysicsBox(20, 5, 0.5, 0, 1.5, -10, wallColor); // Back
+createPhysicsBox(20, 5, 0.5, 0, 1.5, 10, wallColor);  // Front
+createPhysicsBox(0.5, 5, 20, -10, 1.5, 0, wallColor); // Left
+createPhysicsBox(0.5, 5, 20, 10, 1.5, 0, wallColor);  // Right
 
-// Main Service Counter
-createBox(6, 1.2, 1.5, -2, -0.4, -4, 0x221105);
+// Counter
+createPhysicsBox(6, 1.2, 2, -2, -0.4, -6, 0x221105);
 
-// Tables (With Collision)
-function createTable(x, z) {
-    createBox(1.5, 0.1, 1.5, x, -0.4, z, 0x5d4037); // Table Top
-    const leg = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 1), 
-        new THREE.MeshStandardMaterial({color: 0x111111})
-    );
+// Tables
+function makeTable(x, z) {
+    createPhysicsBox(2, 0.1, 2, x, -0.4, z, 0x5d4037); // Table Top
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), new THREE.MeshStandardMaterial({color: 0x000000}));
     leg.position.set(x, -0.9, z);
     scene.add(leg);
 }
-createTable(4, 2);
-createTable(4, -2);
-createTable(-4, 3); // Added an extra table for the layout
+makeTable(5, 5);
+makeTable(5, -5);
+makeTable(-5, 5);
 
-// --- 4. INPUT & MOVEMENT ---
+// --- 4. CONTROLS ---
 const keys = {};
 let yaw = 0, pitch = 0;
 
@@ -91,54 +96,58 @@ window.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === renderer.domElement) {
         yaw -= e.movementX * 0.002;
         pitch -= e.movementY * 0.002;
-        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+        pitch = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
         camera.rotation.set(pitch, yaw, 0, 'YXZ');
     }
 });
 
-camera.position.set(0, 1, 4);
+camera.position.set(0, 1, 0);
 
-// --- 5. COLLISION CHECKER ---
-function checkCollision(newPos) {
-    const playerBox = new THREE.Box3().setFromCenterAndSize(
-        newPos,
-        new THREE.Vector3(playerRadius, 1.5, playerRadius)
+// --- 5. COLLISION LOGIC ---
+function isColliding(pos) {
+    // Create a bounding box for the player
+    const pBox = new THREE.Box3().setFromCenterAndSize(
+        pos,
+        new THREE.Vector3(playerRadius, 1.8, playerRadius)
     );
-    for (let obs of obstacles) {
-        if (playerBox.intersectsBox(obs)) return true;
+
+    for (let i = 0; i < obstacles.length; i++) {
+        if (pBox.intersectsBox(obstacles[i])) return true;
     }
     return false;
 }
 
-// --- 6. CORE UPDATE LOOP ---
+// --- 6. GAME LOOP ---
 function update() {
     if (document.pointerLockElement === renderer.domElement) {
-        const speed = 0.08;
+        const speed = 0.1;
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         forward.y = 0; right.y = 0;
         forward.normalize(); right.normalize();
 
-        // Handle X/Z Movement
-        const wishDir = new THREE.Vector3(0, 0, 0);
-        if (keys['KeyW']) wishDir.add(forward);
-        if (keys['KeyS']) wishDir.add(forward.clone().negate());
-        if (keys['KeyA']) wishDir.add(right.clone().negate());
-        if (keys['KeyD']) wishDir.add(right);
+        const move = new THREE.Vector3(0, 0, 0);
+        if (keys['KeyW']) move.add(forward);
+        if (keys['KeyS']) move.add(forward.clone().negate());
+        if (keys['KeyA']) move.add(right.clone().negate());
+        if (keys['KeyD']) move.add(right);
 
-        if (wishDir.length() > 0) {
-            wishDir.normalize().multiplyScalar(speed);
+        if (move.length() > 0) {
+            move.normalize().multiplyScalar(speed);
             
-            const nextX = camera.position.clone().add(new THREE.Vector3(wishDir.x, 0, 0));
-            if (!checkCollision(nextX)) camera.position.x = nextX.x;
-            
-            const nextZ = camera.position.clone().add(new THREE.Vector3(0, 0, wishDir.z));
-            if (!checkCollision(nextZ)) camera.position.z = nextZ.z;
+            // Step-by-step collision check (X then Z)
+            const nextX = camera.position.clone();
+            nextX.x += move.x;
+            if (!isColliding(nextX)) camera.position.x = nextX.x;
+
+            const nextZ = camera.position.clone();
+            nextZ.z += move.z;
+            if (!isColliding(nextZ)) camera.position.z = nextZ.z;
         }
 
-        // Handle Gravity & Jumping
+        // Gravity math
         camera.position.y += yVelocity;
-        if (camera.position.y > 1) { 
+        if (camera.position.y > 1) {
             yVelocity += gravity;
             isGrounded = false;
         } else {
